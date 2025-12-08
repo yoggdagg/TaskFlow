@@ -25,21 +25,36 @@
                     </svg>
                 </button>
 
-                <!-- 알림 버튼 -->
-                <button @click="toggleNotifications" class="action-btn notification-btn" aria-label="알림">
-                    <svg viewBox="0 0 24 24" class="icon">
-                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                    </svg>
-                    <span v-if="notificationCount > 0" class="badge">{{ notificationCount }}</span>
-                </button>
+                <!-- 로그인 상태에 따라 분기 -->
+                <template v-if="isLoggedIn">
+                    <!-- 알림 버튼 -->
+                    <button @click="toggleNotifications" class="action-btn notification-btn" aria-label="알림">
+                        <svg viewBox="0 0 24 24" class="icon">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                        <span v-if="notificationCount > 0" class="badge">{{ notificationCount }}</span>
+                    </button>
 
-                <!-- 프로필 버튼 -->
-                <button @click="toggleProfileMenu" class="profile-btn" aria-label="프로필">
-                    <div class="avatar">
-                        <span>{{ userInitial }}</span>
-                    </div>
-                </button>
+                    <!-- 프로필 버튼 -->
+                    <button @click="toggleProfileMenu" class="profile-btn" aria-label="프로필">
+                        <div class="avatar">
+                            <span>{{ userInitial }}</span>
+                        </div>
+                    </button>
+                </template>
+
+                <!-- 비로그인 상태: 로그인 버튼 -->
+                <template v-else>
+                    <button @click="openLoginModal" class="login-btn">
+                        <svg viewBox="0 0 24 24" class="icon">
+                            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                            <polyline points="10 17 15 12 10 7"></polyline>
+                            <line x1="15" y1="12" x2="3" y2="12"></line>
+                        </svg>
+                        <span>로그인</span>
+                    </button>
+                </template>
             </div>
         </div>
 
@@ -104,23 +119,31 @@
                 </div>
             </div>
         </transition>
+
+        <!-- 로그인 모달 -->
+        <LoginModal v-model:show="showLoginModal" @login-success="handleLoginSuccess" />
     </header>
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import LoginModal from './LoginModal.vue'
 
 const router = useRouter()
 
 // 상태 관리
 const showSearch = ref(false)
 const showProfileMenu = ref(false)
+const showLoginModal = ref(false)
 const searchQuery = ref('')
 const searchInput = ref(null)
 const notificationCount = ref(3)
 
-// 사용자 정보 (나중에 store에서 가져오기)
+// 로그인 상태 (실제로는 store에서 관리)
+const isLoggedIn = ref(false)
+
+// 사용자 정보
 const userName = ref('김개발')
 const userEmail = ref('dev@taskflow.com')
 
@@ -136,6 +159,23 @@ const greeting = computed(() => {
 const userInitial = computed(() => {
     return userName.value.charAt(0).toUpperCase()
 })
+
+// 로그인 모달 열기
+const openLoginModal = () => {
+    showLoginModal.value = true
+}
+
+// 로그인 성공 처리
+const handleLoginSuccess = (userData) => {
+    isLoggedIn.value = true
+    userName.value = userData.name
+    userEmail.value = userData.email
+    showLoginModal.value = false
+
+    console.log('로그인 성공:', userData)
+    // 실제로는 store에 사용자 정보 저장
+    // localStorage.setItem('accessToken', userData.accessToken)
+}
 
 // 검색 토글
 const toggleSearch = async () => {
@@ -182,21 +222,26 @@ const goToSettings = () => {
 }
 
 const logout = () => {
-    // 로그아웃 로직
-    console.log('로그아웃')
+    isLoggedIn.value = false
+    userName.value = ''
+    userEmail.value = ''
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('refreshToken')
     closeProfileMenu()
+    console.log('로그아웃')
+    // router.push('/')
 }
 
-// 검색 감시 (실제로는 API 호출)
+// 검색 감시
 watch(searchQuery, (newValue) => {
     if (newValue.length > 0) {
         console.log('검색:', newValue)
-        // 여기서 검색 API 호출
     }
 })
 </script>
 
 <style scoped>
+/* 기존 스타일 유지 */
 .navbar {
     position: sticky;
     top: 0;
@@ -215,7 +260,6 @@ watch(searchQuery, (newValue) => {
     align-items: center;
 }
 
-/* 브랜드 */
 .navbar-brand {
     display: flex;
     align-items: center;
@@ -264,7 +308,6 @@ watch(searchQuery, (newValue) => {
     line-height: 1;
 }
 
-/* 액션 버튼들 */
 .navbar-actions {
     display: flex;
     align-items: center;
@@ -308,7 +351,37 @@ watch(searchQuery, (newValue) => {
     transition: stroke 0.2s;
 }
 
-/* 알림 배지 */
+/* 로그인 버튼 스타일 */
+.login-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.login-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.login-btn .icon {
+    width: 18px;
+    height: 18px;
+    stroke: white;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
+
 .notification-btn {
     position: relative;
 }
@@ -331,7 +404,6 @@ watch(searchQuery, (newValue) => {
     border: 2px solid white;
 }
 
-/* 프로필 버튼 */
 .profile-btn {
     border: none;
     background: transparent;
@@ -358,7 +430,6 @@ watch(searchQuery, (newValue) => {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
-/* 검색 컨테이너 */
 .search-container {
     max-width: 640px;
     margin: 0 auto;
@@ -431,7 +502,6 @@ watch(searchQuery, (newValue) => {
     stroke-width: 2;
 }
 
-/* 프로필 드롭다운 */
 .dropdown-overlay {
     position: fixed;
     top: 0;
@@ -556,7 +626,6 @@ watch(searchQuery, (newValue) => {
     fill: none;
 }
 
-/* 애니메이션 */
 .slide-down-enter-active,
 .slide-down-leave-active {
     transition: all 0.3s ease;
@@ -582,7 +651,6 @@ watch(searchQuery, (newValue) => {
     opacity: 0;
 }
 
-/* 반응형 */
 @media (max-width: 480px) {
     .navbar-container {
         padding: 12px 16px;
@@ -596,6 +664,16 @@ watch(searchQuery, (newValue) => {
         right: 16px;
         left: 16px;
         min-width: auto;
+    }
+
+    .login-btn span {
+        display: none;
+    }
+
+    .login-btn {
+        padding: 10px;
+        width: 40px;
+        height: 40px;
     }
 }
 </style>

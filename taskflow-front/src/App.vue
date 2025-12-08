@@ -5,12 +5,13 @@ import Home from '@/views/Home.vue'
 </script>
 
 <template>
-  <Nav />
-
   <div>
-    <Home />
+    <Nav />
   </div>
-  <Footer.vue />
+  <div>
+    <RouterView />
+  </div>
+  <Footer />
 
 </template>
 

@@ -120,11 +120,13 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
-import { useRouter } from 'vue-router'  // 추가
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/authStore'
+import { googleLogin, kakaoLogin, naverLogin } from '@/api/oauth'
 
-const router = useRouter()  // 추가
-
+const router = useRouter()
+const authStore = useAuthStore();
 const props = defineProps({
     show: {
         type: Boolean,
@@ -156,64 +158,96 @@ const togglePassword = () => {
     showPassword.value = !showPassword.value
 }
 
-// 이메일 로그인
+// 컴포넌트 마운트 시 저장된 이메일 불러오기
+onMounted(() => {
+    const savedEmail = localStorage.getItem('savedEmail')
+    if (savedEmail) {
+        email.value = savedEmail
+        rememberMe.value = true
+    }
+})
+
+// 일반 로그인
 const handleEmailLogin = async () => {
     isLoading.value = true
 
     try {
-        // API 호출 시뮬레이션 (실제로는 authService.login() 호출)
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        const response = await auth.login(email.value, password.value)
 
-        // 로그인 성공 시 부모 컴포넌트에 데이터 전달
+        // 토큰을 localStorage에 저장
+        if (response.accessToken) {
+            localStorage.setItem('accessToken', response.accessToken)
+        }
+        if (response.refreshToken) {
+            localStorage.setItem('refreshToken', response.refreshToken)
+        }
+
+        // 아이디 기억하기 체크박스 처리
+        if (rememberMe.value) {
+            localStorage.setItem('rememberMe', 'true')
+            localStorage.setItem('savedEmail', email.value)
+        } else {
+            localStorage.removeItem('rememberMe')
+            localStorage.removeItem('savedEmail')
+        }
+
+        // 로그인 성공 이벤트 emit
         emit('login-success', {
-            name: '김개발',
-            email: email.value,
-            accessToken: 'mock-access-token',
-            refreshToken: 'mock-refresh-token'
+            name: response.name || response.username,
+            email: response.email,
+            accessToken: response.accessToken,
+            refreshToken: response.refreshToken
         })
+
+        closeModal();
 
         console.log('이메일 로그인 성공')
     } catch (error) {
         console.error('로그인 실패:', error)
-        alert('로그인에 실패했습니다. 다시 시도해주세요.')
+
+        // 에러 메시지 처리
+        let errorMessage = '로그인에 실패했습니다.'
+
+        if (error.response) {
+            // 서버에서 응답이 온 경우
+            switch (error.response.status) {
+                case 401:
+                    errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다.'
+                    break
+                case 404:
+                    errorMessage = '존재하지 않는 계정입니다.'
+                    break
+                case 500:
+                    errorMessage = '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+                    break
+                default:
+                    errorMessage = error.response.data?.message || '로그인에 실패했습니다.'
+            }
+        } else if (error.request) {
+            // 요청은 보냈지만 응답이 없는 경우
+            errorMessage = '서버에 연결할 수 없습니다. 네트워크를 확인해주세요.'
+        }
+
+        alert(errorMessage)
     } finally {
         isLoading.value = false
     }
 }
 
 // 소셜 로그인
-const loginWithGoogle = async () => {
-    console.log('Google 로그인')
-    // 실제로는 OAuth 플로우 시작
-    // window.location.href = `${API_URL}/auth/google`
-
-    // 시뮬레이션
-    emit('login-success', {
-        name: '구글사용자',
-        email: 'google@example.com',
-        accessToken: 'google-token',
-        refreshToken: 'google-refresh'
-    })
+const loginWithGoogle = () => {
+    console.log('Google 로그인 시작')
+    googleLogin() // OAuth 인증 페이지로 리다이렉트
 }
 
-const loginWithKakao = async () => {
-    console.log('Kakao 로그인')
-    emit('login-success', {
-        name: '카카오사용자',
-        email: 'kakao@example.com',
-        accessToken: 'kakao-token',
-        refreshToken: 'kakao-refresh'
-    })
+const loginWithKakao = () => {
+    console.log('Kakao 로그인 시작')
+    kakaoLogin()
 }
 
-const loginWithNaver = async () => {
-    console.log('Naver 로그인')
-    emit('login-success', {
-        name: '네이버사용자',
-        email: 'naver@example.com',
-        accessToken: 'naver-token',
-        refreshToken: 'naver-refresh'
-    })
+const loginWithNaver = () => {
+    console.log('Naver 로그인 시작')
+    naverLogin()
 }
 
 // 비밀번호 찾기

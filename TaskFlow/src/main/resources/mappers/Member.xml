@@ -1,64 +1,113 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 
 <mapper namespace="com.taskflow.repositories.MemberMapper">
-    
+
     <!-- 이메일로 회원 조회 -->
-    <select id="findByEmail" resultType="Member">
-        SELECT * FROM member WHERE email = #{email}
+    <select id="findByEmail" parameterType="String" resultType="com.taskflow.dto.Member">
+        SELECT 
+            id, username, email, pw, address, phone,
+            provider, provider_id, profile_image, role, is_active,
+            created_at, updated_at, last_login_at,
+            refresh_token, token_expires_at
+        FROM member
+        WHERE email = #{email}
     </select>
     
-    <!-- OAuth: provider + provider_id로 회원 조회 -->
-    <select id="findByProviderAndProviderId" resultType="Member">
-        SELECT * 
-        FROM member 
-        WHERE provider = #{provider} 
+    <!-- 회원 가입 (OAuth용) -->
+    <insert id="registerMember" parameterType="com.taskflow.dto.Member" 
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO member (
+            username, email, pw, address, phone,
+            provider, provider_id, profile_image, role, is_active,
+            created_at
+        ) VALUES (
+            #{username}, #{email}, #{pw}, #{address}, #{phone},
+            #{provider}, #{providerId}, #{profileImage}, 
+            COALESCE(#{role}, 'ROLE_USER'), 
+            COALESCE(#{isActive}, 1),
+            NOW()
+        )
+    </insert>
+    
+    <!-- OAuth Provider와 ProviderId로 회원 조회 -->
+    <select id="findByProviderAndProviderId" resultType="com.taskflow.dto.Member">
+        SELECT 
+            id, username, email, pw, address, phone,
+            provider, provider_id, profile_image, role, is_active,
+            created_at, updated_at, last_login_at,
+            refresh_token, token_expires_at
+        FROM member
+        WHERE provider = #{provider}
           AND provider_id = #{providerId}
     </select>
     
     <!-- 이메일 중복 체크 -->
-    <select id="existsByEmail" resultType="boolean">
-        SELECT COUNT(*) > 0 
-        FROM member 
+    <select id="existsByEmail" parameterType="String" resultType="boolean">
+        SELECT COUNT(*) > 0
+        FROM member
         WHERE email = #{email}
     </select>
     
     <!-- Provider + ProviderId 중복 체크 -->
     <select id="existsByProviderAndProviderId" resultType="boolean">
-        SELECT COUNT(*) > 0 
-        FROM member 
-        WHERE provider = #{provider} 
+        SELECT COUNT(*) > 0
+        FROM member
+        WHERE provider = #{provider}
           AND provider_id = #{providerId}
     </select>
     
-    <!-- 일반 회원가입 -->
-    <insert id="registerMember" parameterType="Member" useGeneratedKeys="true" keyProperty="id">
-        INSERT INTO member(
-            username, 
-            email, 
-            pw, 
-            address, 
-            phone, 
-            provider,
-            provider_id,
-            profile_image,
-            role, 
-            is_active, 
-            created_at
-        )
-        VALUES(
-            #{username}, 
-            #{email}, 
-            #{pw}, 
-            #{address}, 
-            #{phone},
-            COALESCE(#{provider}, 'LOCAL'),
-            #{providerId},
-            #{profileImage},
-            COALESCE(#{role}, 'ROLE_USER'),
-            COALESCE(#{isActive}, true),
-            NOW()
-        )
-    </insert>
+    <!-- 일반 로그인 (이메일 + 비밀번호) -->
+    <select id="login" resultType="com.taskflow.dto.Member">
+        SELECT 
+            id, username, email, pw, address, phone,
+            provider, provider_id, profile_image, role, is_active,
+            created_at, updated_at, last_login_at,
+            refresh_token, token_expires_at
+        FROM member
+        WHERE email = #{email}
+          AND pw = #{pw}
+          AND is_active = 1
+    </select>
+    
+    <!-- Refresh Token 업데이트 -->
+    <update id="updateRefreshToken">
+        UPDATE member
+        SET refresh_token = #{refreshToken},
+            token_expires_at = #{tokenExpiresAt},
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+    
+    <!-- Refresh Token으로 회원 조회 -->
+    <select id="findByRefreshToken" parameterType="String" resultType="com.taskflow.dto.Member">
+        SELECT 
+            id, username, email, pw, address, phone,
+            provider, provider_id, profile_image, role, is_active,
+            created_at, updated_at, last_login_at,
+            refresh_token, token_expires_at
+        FROM member
+        WHERE refresh_token = #{refreshToken}
+          AND token_expires_at > NOW()
+          AND is_active = 1
+    </select>
+    
+    <!-- Refresh Token 삭제 (로그아웃) -->
+    <update id="deleteRefreshToken">
+        UPDATE member
+        SET refresh_token = NULL,
+            token_expires_at = NULL,
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+    
+    <!-- 마지막 로그인 시간 업데이트 -->
+    <update id="updateLastLoginAt">
+        UPDATE member
+        SET last_login_at = NOW(),
+            updated_at = NOW()
+        WHERE id = #{id}
+    </update>
+
 </mapper>

@@ -5,17 +5,17 @@
 
             <!-- 소셜 로그인 버튼 -->
             <div class="social-login-section">
-                <button @click="socialLogin('google')" class="social-btn google-btn" disabled>
+                <button @click="socialLogin('google')" class="social-btn google-btn">
                     <span class="icon">G</span>
                     구글로 시작하기
                 </button>
 
-                <button @click="socialLogin('naver')" class="social-btn naver-btn" disabled>
+                <button @click="socialLogin('naver')" class="social-btn naver-btn">
                     <span class="icon">N</span>
                     네이버로 시작하기
                 </button>
 
-                <button @click="socialLogin('kakao')" class="social-btn kakao-btn" disabled>
+                <button @click="socialLogin('kakao')" class="social-btn kakao-btn">
                     <span class="icon">K</span>
                     카카오로 시작하기
                 </button>
@@ -75,7 +75,8 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFormValidation } from '@/composables/useFormValidation';
-import auth from '@/api/auth';
+import { auth } from '@/api/auth';
+import { googleLogin, naverLogin, kakaoLogin } from '@/api/oauth';
 
 const router = useRouter();
 const isSubmitting = ref(false);
@@ -143,9 +144,21 @@ const handleRegistrationError = (error) => {
     }
 };
 
-// 소셜 로그인 처리 (현재는 비활성화)
+// 소셜 로그인 처리
 const socialLogin = (provider) => {
-    console.log(`${provider} 로그인은 준비 중입니다.`);
+    switch (provider) {
+        case 'google':
+            googleLogin();
+            break;
+        case 'kakao':
+            kakaoLogin();
+            break;
+        case 'naver':
+            naverLogin();
+            break;
+        default:
+            console.log(`${provider} 로그인은 준비 중입니다.`);
+    }
 };
 </script>
 

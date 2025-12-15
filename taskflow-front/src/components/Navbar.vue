@@ -39,7 +39,8 @@
                     <!-- 프로필 버튼 -->
                     <button @click="toggleProfileMenu" class="profile-btn" aria-label="프로필">
                         <div class="avatar">
-                            <span>{{ userInitial }}</span>
+                            <img v-if="userProfileImage" :src="userProfileImage" :alt="userName" class="avatar-image" />
+                            <span v-else>{{ userInitial }}</span>
                         </div>
                     </button>
                 </template>
@@ -83,7 +84,10 @@
             <div v-if="showProfileMenu" class="dropdown-overlay" @click="closeProfileMenu">
                 <div class="profile-dropdown" @click.stop>
                     <div class="profile-header">
-                        <div class="profile-avatar">{{ userInitial }}</div>
+                        <div class="profile-avatar">
+                            <img v-if="userProfileImage" :src="userProfileImage" :alt="userName" class="avatar-image" />
+                            <span v-else>{{ userInitial }}</span>
+                        </div>
                         <div class="profile-info">
                             <p class="profile-name">{{ userName }}</p>
                             <p class="profile-email">{{ userEmail }}</p>
@@ -121,16 +125,19 @@
         </transition>
 
         <!-- 로그인 모달 -->
-        <LoginModal v-model:show="showLoginModal" @login-success="handleLoginSuccess" />
+        <LoginModal v-if="showLoginModal" v-model:show="showLoginModal" @login-success="handleLoginSuccess" />
     </header>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import LoginModal from './LoginModal.vue'
+import { auth } from '@/api/auth'
+import { useAuthStore } from '@/stores/authStore';
 
 const router = useRouter()
+const authStore = useAuthStore();
 
 // 상태 관리
 const showSearch = ref(false)
@@ -140,12 +147,40 @@ const searchQuery = ref('')
 const searchInput = ref(null)
 const notificationCount = ref(3)
 
-// 로그인 상태 (실제로는 store에서 관리)
+// 로그인 상태 및 사용자 정보
 const isLoggedIn = ref(false)
+const userName = ref('')
+const userEmail = ref('')
+const userProfileImage = ref('')
 
-// 사용자 정보
-const userName = ref('김개발')
-const userEmail = ref('dev@taskflow.com')
+// 컴포넌트 마운트 시 로그인 상태 확인
+onMounted(() => {
+    checkLoginStatus()
+})
+
+const checkLoginStatus = () => {
+    const token = authStore.accessToken;
+    const userData = authStore.user;
+
+    if (token && userData) {
+        isLoggedIn.value = true;
+        userName.value = userData.name || userData.username || '사용자';
+        userEmail.value = userData.email || '';
+        userProfileImage.value = userData.profileImage || '';
+
+        console.log('✅ 로그인 상태 확인:', {
+            isLoggedIn: isLoggedIn.value,
+            userName: userName.value,
+            userEmail: userEmail.value
+        });
+    } else {
+        console.log('❌ 로그인되지 않음');
+        isLoggedIn.value = false;
+        userName.value = '';
+        userEmail.value = '';
+        userProfileImage.value = '';
+    }
+};
 
 // 인사말
 const greeting = computed(() => {
@@ -157,24 +192,33 @@ const greeting = computed(() => {
 
 // 사용자 이니셜
 const userInitial = computed(() => {
+    if (!userName.value) return 'U'
     return userName.value.charAt(0).toUpperCase()
 })
 
 // 로그인 모달 열기
 const openLoginModal = () => {
+    console.log('로그인 모달 열기')
     showLoginModal.value = true
 }
 
 // 로그인 성공 처리
 const handleLoginSuccess = (userData) => {
+    console.log('로그인 성공 처리:', userData)
+
     isLoggedIn.value = true
-    userName.value = userData.name
-    userEmail.value = userData.email
+    userName.value = userData.username || userData.name || '사용자'
+    userEmail.value = userData.email || ''
+    userProfileImage.value = userData.profileImage || ''
     showLoginModal.value = false
 
-    console.log('로그인 성공:', userData)
-    // 실제로는 store에 사용자 정보 저장
-    // localStorage.setItem('accessToken', userData.accessToken)
+    // localStorage에 저장 (이미 GoogleCallback에서 저장되었지만 일반 로그인용)
+    if (userData.accessToken) {
+        localStorage.setItem('accessToken', userData.accessToken)
+    }
+    if (userData.member) {
+        localStorage.setItem('user', JSON.stringify(userData.member))
+    }
 }
 
 // 검색 토글
@@ -212,7 +256,7 @@ const closeProfileMenu = () => {
 
 // 메뉴 액션
 const goToProfile = () => {
-    router.push('/profile')
+    router.push('/member/profile')
     closeProfileMenu()
 }
 
@@ -222,14 +266,24 @@ const goToSettings = () => {
 }
 
 const logout = () => {
+    // localStorage 정리
+    localStorage.removeItem('accessToken')
+    localStorage.removeItem('user')
+
+    // 상태 초기화
     isLoggedIn.value = false
     userName.value = ''
     userEmail.value = ''
-    localStorage.removeItem('accessToken')
-    localStorage.removeItem('refreshToken')
+    userProfileImage.value = ''
+
     closeProfileMenu()
-    console.log('로그아웃')
-    // router.push('/')
+    const response = auth.logout()
+
+    console.log('✅ 로그아웃 완료')
+    alert('로그아웃되었습니다.')
+
+    // 메인 페이지로 이동
+    router.push('/')
 }
 
 // 검색 감시
@@ -238,10 +292,34 @@ watch(searchQuery, (newValue) => {
         console.log('검색:', newValue)
     }
 })
+
+// 전역 이벤트로 로그인 상태 업데이트
+window.addEventListener('storage', (e) => {
+    if (e.key === 'accessToken' || e.key === 'user') {
+        checkLoginStatus()
+    }
+})
+
+// 라우터 변경 시 로그인 상태 재확인
+watch(() => router.currentRoute.value.path, () => {
+    checkLoginStatus()
+})
 </script>
 
 <style scoped>
-/* 기존 스타일 유지 */
+/* 프로필 이미지 스타일 */
+.avatar-image {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.profile-avatar .avatar-image {
+    border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+/* 기존 스타일들 */
 .navbar {
     position: sticky;
     top: 0;
@@ -423,6 +501,7 @@ watch(searchQuery, (newValue) => {
     font-weight: 700;
     font-size: 16px;
     transition: all 0.2s;
+    overflow: hidden;
 }
 
 .profile-btn:hover .avatar {
@@ -561,6 +640,7 @@ watch(searchQuery, (newValue) => {
     color: white;
     font-weight: 700;
     font-size: 20px;
+    overflow: hidden;
 }
 
 .profile-info {
